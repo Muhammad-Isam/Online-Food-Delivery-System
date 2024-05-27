@@ -1,0 +1,1028 @@
+Select Top 4 RestaurantName from Restaurant
+
+create view getRestaurants
+as
+Select top(3) Name, Address
+from Restaurant
+
+select * from getRestaurants
+
+create function nextRestaurants
+(@RestaurantName varchar(50), @RAddr varchar(50))
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant
+where RestaurantID>(Select RestaurantID from Restaurant
+where Name=@RestaurantName AND Address=@RAddr))
+
+select * from Restaurant
+select * from nextRestaurants('OD','5 Star Chowrangi, North Nazimabad')
+
+create function prevRestaurants
+(@RestaurantName varchar(50), @RAddr varchar(50))
+returns table
+as
+return
+(Select Top(3) Name from Restaurant
+where RestaurantID<(Select RestaurantID from Restaurant
+where Name=@RestaurantName AND Address=@RAddr))
+
+select * from prevRestaurants('OD','5 Star Chowrangi, North Nazimabad')
+
+create function searchRestaurantbyCity
+(@City varchar(25))
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant
+where City like @City)
+
+select * from searchRestaurantbyCity('Karachi')
+
+create function nextSearchRestByCity -- PASS C4
+(@City varchar(25), @RName varchar(50),@RAdd varchar(50))
+returns table
+as
+return
+(Select top(3) Name, Address from Restaurant
+where RestaurantID>(Select RestaurantID from Restaurant where Name=@RName AND City like @City AND Address=@RAdd)
+)
+
+select * from nextSearchRestByCity('Karachi','Kababjees Fried Chicken','Shop No.1, Saima Paari Tower, Hyderi')
+
+create function prevSearchRestByCity -- PASS C4
+(@City varchar(25), @RName varchar(50),@RAdd varchar(50))
+returns table
+as
+return
+(Select top(3) Name, Address from Restaurant
+where RestaurantID<(Select RestaurantID from Restaurant where Name=@RName AND City like @City AND Address=@RAdd)
+)
+
+select * from prevSearchRestByCity('Karachi','Soft Swirl',' Plot No Al Mustafa Terrace Shop 7  Jamshed Rd')
+
+
+create view getCategory
+as
+Select Top(3) CategoryType from Category
+
+select * from getCategory
+
+create function nextCategory
+(@CName varchar(25))
+returns table
+as
+return
+(Select Top(3) CategoryType from Category
+where CategoryID>(Select CategoryID from Category where CategoryType=@CName)
+)
+
+select * from nextCategory('Fried Rice')
+
+create function prevCategory
+(@CName varchar(25))
+returns table
+as
+return
+(Select Top(3) CategoryType from Category
+where CategoryID<(Select CategoryID from Category where CategoryType=@CName)
+)
+
+
+create view TopPicks
+as
+Select Top(3) r.Name, r.Address, avg(Rating)'Rating' from Restaurant r, ReviewRating rr
+where r.RestaurantID=rr.RestaurantID
+group by rr.RestaurantID,r.Name, r.Address
+order by avg(Rating)
+
+select * from TopPicks
+
+create function getRestByCatCity
+(@City varchar(25), @CName varchar(25))
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant r, ResCat rc, Category C
+where r.RestaurantID=rc.RestaurantID
+AND rc.CategoryID=c.CategoryID
+AND r.City=@City AND CategoryType=@CName)
+
+select * from getCategory
+select * from getRestByCatCity('Karachi','Fastfood')
+
+create function getNextResByCatCity
+(@City varchar(25),@CName varchar(25), @RName varchar(50), @RAdd varchar(50))
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant r, ResCat rc, Category C
+where r.RestaurantID=rc.RestaurantID
+AND rc.CategoryID=c.CategoryID
+AND r.RestaurantID>(Select RestaurantID from Restaurant
+where Name=@RName AND Address=@RAdd)
+AND r.City=@City AND CategoryType=@CName)
+
+select * from Restaurant
+select * from getNextResByCatCity('Karachi','Fastfood','Kababjees Fried Chicken','8 F Mohammad Ali Society Muhammad Ali Chs (Machs)')
+select * from ResCat
+select * from Category
+create function getPrevResByCatCity
+(@City varchar(25),@CName varchar(25), @RName varchar(50), @RAdd varchar(50))
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant r, ResCat rc, Category C
+where r.RestaurantID=rc.RestaurantID
+AND rc.CategoryID=c.CategoryID
+AND r.RestaurantID<(Select RestaurantID from Restaurant
+where Name=@RName AND Address=@RAdd)
+AND r.City=@City AND CategoryType=@CName)
+
+select * from getPrevResByCatCity('Karachi','Fastfood','Kababjees Fried Chicken','8 F Mohammad Ali Society Muhammad Ali Chs (Machs)')
+
+
+create function getUserCoupons
+(@uEmail varchar(25))
+returns table
+as
+return
+(SELECT pc.*
+FROM PromotionCoupon pc
+LEFT JOIN UserCoupon uc ON pc.CouponCode = uc.CouponCode
+WHERE (uc.CouponCode IS NULL OR uc.Email <> @uEmail)
+AND ExpiryDate>=getdate())
+
+create procedure addUserCoupon
+@Email varchar(25), @CouponCode varchar(25)
+as
+begin
+insert into UserCoupon(Email,CouponCode) values (@Email,@CouponCode)
+end
+
+create function getUserDetail
+(@Email varchar(25),@Password varchar(25))
+returns table
+as
+return
+(Select * from [User]
+where Email=@Email AND Password=@Password)
+
+CREATE FUNCTION loginUser
+(@Email VARCHAR(25), @Password VARCHAR(25))
+RETURNS VARCHAR(10)
+AS
+BEGIN
+    DECLARE @userCount INT, @Result VARCHAR(10);
+
+    SELECT @userCount = COUNT(*)
+    FROM [User]
+    WHERE Email = @Email AND Password = @Password;
+
+    -- Return 'Success' if a matching user is found, otherwise 'Fail'
+    IF @userCount > 0
+        SET @Result = 'Success';
+    ELSE
+        SET @Result = 'Fail';
+
+    RETURN @Result;
+END;
+
+create function getUserAddress
+(@Email varchar(25))
+returns varchar(50)
+as
+begin
+declare @Address varchar(50)
+select @Address=Address from Address a, UserAddress ua
+where a.AddressID=ua.AddressID and ua.isDefault=1
+return @Address
+end
+
+create function getUserAddressNotDefault
+(@Email varchar(25))
+returns table
+as
+return
+(select Address from Address a, UserAddress ua
+where a.AddressID=ua.AddressID and ua.isDefault=0 AND Email=@Email)
+
+ create procedure addUserAddress
+@Email varchar(25),
+@Address varchar(50)
+as
+begin
+declare @AddressID int;
+
+if NOT exists(Select * from Address where Address=@Address)
+begin
+Insert into Address(Address)values(@Address)
+select Top 1 @AddressID=AddressID from [Address]
+order by AddressID desc
+
+insert into UserAddress(AddressID,Email,isDefault)values(@AddressID,@Email,0)
+end
+end
+
+if exists(Select * from Address where Address=@Address)
+begin
+select @AddressID=AddressID from Address
+where Address=@Address
+end
+
+Insert into UserAddress(Email,AddressID,isDefault) values (@Email,@AddressID,0)
+end
+
+create function getRestaurantByName
+(
+    @RName varchar(25)
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT TOP(3) Name, Address 
+    FROM Restaurant
+    WHERE Name LIKE '%'+ @RName + '%'
+)
+
+
+create function nextRestaurantByName
+(@RName varchar(50),@RsName varchar(50),@RAdd varchar(50) )
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant
+where Name LIKE '%'+ @RName + '%' and RestaurantID>(Select RestaurantID from Restaurant 
+where name=@RsName and Address=@RAdd))
+
+
+create function prevRestaurantByName
+(@RName varchar(50),@RsName varchar(50),@RAdd varchar(50) )
+returns table
+as
+return
+(Select Top(3) Name, Address from Restaurant
+where Name LIKE '%'+ @RName + '%' and RestaurantID<(Select RestaurantID from Restaurant 
+where name=@RsName and Address=@RAdd))
+
+create function RestaurantReview
+(@RName varchar(50))
+returns table
+as
+return
+(Select rr.Rating, rr.Comment, rr.RevDate, u.Name
+from ReviewRating rr, [User] u, Restaurant r
+where u.Email=rr.Email
+AND r.RestaurantID=rr.RestaurantID
+AND r.Name=@RName)
+
+MenuItems --> Restaurant
+Restaurant Page
+Cart Page
+
+--create procedure to input address into address table
+---> Use getUserOrderInfo function to display Receipt
+
+create function getUserOrderInfo
+(@OrderID int)
+returns table
+as
+return
+(select (e.FirstName+' '+e.LastName)'RiderName', v.LicensePlate, e.Phone, r.Name as 'RestaurantName',
+r.Address'RestaurantAddress', o.OrderID, a.Address'DeliveryAddress', m.Name as 'Menu Item', m.Price'ItemPrice',pc.CouponCode,pc.Discount, oi.Quantity,oi.Subtotal'ItemSubTotal',
+gt.TotalAmount-Discount'OrderSubTotal', p.PaymentMethod, (gt.TotalAmount)'Total'
+from MenuItem m, OrderItem oi, OrderInfo oin, Payment p,
+Restaurant r, UserAddress ua, Address a, Employee e, Vehicle v, [User] u ,GrandTotal gt, [Order] o left join PromotionCoupon pc on pc.CouponCode=o.CouponCode
+where
+r.RestaurantID=oin.RestaurantID
+AND p.OrderID=1
+AND ua.Email=oin.Email
+AND m.ItemID=oi.MenuItemID
+and e.Email=oin.RiderEmail
+and e.VehicleID=v.VehicleID
+--and pc.CouponCode=o.CouponCode
+and o.OrderID=@OrderID
+and oi.OrderID=@OrderID
+and gt.OrderID=@OrderID
+AND oin.OrderID=@OrderID
+and o.OrderDate<=getdate()
+AND oin.AddressID=a.AddressID
+)
+
+select * from viewOrderInfo(1)
+
+create function showUserOrders
+(@Email varchar(25))
+returns table
+as
+return
+(select distinct o.OrderID, o.Orderdate, gt.TotalAmount
+from [Order] o, GrandTotal gt, [User] u,
+OrderInfo oi
+where
+oi.OrderID=o.OrderID
+AND gt.OrderID=o.OrderID
+AND oi.Email=@Email
+)
+
+create procedure CustomerSignUp
+@name varchar(25),
+@email varchar(25),
+@password varchar(25),
+@phoneno varchar(25),
+@address varchar(50),
+@city varchar(25),
+@dob date
+as 
+begin
+insert into Address(Address) values (@address)
+select @address=AddressID from Address where Address=@address
+insert into [user](Name, Email, Password, PhoneNo, DateOfBirth, RegistrationDate) values (@name, @email, @password, @phoneno, @dob, GETDATE())
+insert into UserAddress(email, AddressID, isDefault) values (@email, @address, 1)
+end
+
+create function calGrandTotal
+(@OrderID INT)
+returns decimal(10,2)
+as
+begin
+    declare @GrandTotal decimal(10,2);
+
+    select @GrandTotal = (sum(oi.Subtotal) - isNULL(pc.Discount, 0))
+    from OrderItem oi
+    left join [Order] o on oi.OrderID = o.OrderID
+    left join PromotionCoupon pc on o.CouponCode = pc.CouponCode
+    where oi.OrderID = @OrderID
+	group by pc.Discount
+    RETURN @GrandTotal;
+END
+
+
+declare @Total decimal(10,2)
+set @Total = dbo.calGrandTotal(2)
+select @Total as 'Total Amount'
+
+
+create function checkReviewEligibility
+(@Email varchar(25),
+@OrderID int)
+returns varchar(15)
+as
+begin
+declare @Eligibility varchar(15), @count int;
+
+if exists(
+select *
+from
+ReviewRating rr, OrderStatus os
+where rr.OrderID=@OrderID AND Email=@Email
+AND os.OrderID=@OrderID)
+begin
+set @count=1
+end
+if not exists (select *
+from
+ReviewRating rr, OrderStatus os
+where rr.OrderID=@OrderID AND Email=@Email
+AND os.OrderID=@OrderID) AND exists (Select * from OrderStatus os, StatusOfOrder so where OrderID=@OrderID AND os.StatusID=so.StatusID and StatusName='Pending')
+begin
+set @count=1
+end
+if not exists (select *
+from
+ReviewRating rr, OrderStatus os
+where rr.OrderID=@OrderID AND Email=@Email
+AND os.OrderID=@OrderID) and not exists  (Select * from OrderStatus os, StatusOfOrder so where OrderID=@OrderID AND os.StatusID=so.StatusID and StatusName='Pending')
+begin
+set @count=0
+end
+
+if @count > 0
+set @Eligibility='Not Eligible'
+else
+set @Eligibility='Eligible'
+return @Eligibility
+end
+
+
+select dbo.checkReviewEligibility('za@gmail.com',1)
+
+create procedure submitReview
+@Email varchar(25),
+@ResID int,
+@OrderID int,
+@Rating int,
+@Comment varchar(75)
+as
+begin
+Insert into ReviewRating(Email,RestaurantID,OrderID,Rating,Comment,RevDate) values (@Email,@ResID,@OrderID,@Rating,@Comment,getdate())
+end
+
+create function getRestaurantID
+(@RName varchar(50), @RAdd varchar(50))
+returns int
+as
+begin
+declare @RID int;
+select @RID=RestaurantID from Restaurant
+where Name=@RName AND Address=@RAdd
+return @RID
+end
+
+create function getRestaurantMenu
+(@ResName varchar(25),@RAddress varchar(50))
+returns table
+as
+return
+(select Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.Name=@ResName
+AND r.Address=@RAddress
+AND m.ItemID=ri.ItemID)
+
+create function getnextRestaurantMenu
+(@MName varchar(50), @ResName varchar(50),@RAddress varchar(50))
+returns table
+as
+return
+(select Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.Name=@ResName
+AND r.Address=@RAddress
+AND ri.ItemID=m.ItemID
+AND m.ItemID>(Select ItemID from MenuItem where Name=@MName))
+
+
+create function getprevRestaurantMenu
+(@MName varchar(50), @ResName varchar(50),@RAddress varchar(50))
+returns table
+as
+return
+(select Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.Name=@ResName
+AND r.Address=@RAddress
+AND ri.ItemID=m.ItemID
+AND m.ItemID<(Select ItemID from MenuItem where Name=@MName))
+
+create function nextRestaurantItem
+(@MName varchar(25), @ResName varchar(25),@RAddress varchar(50))
+returns table
+as
+return
+(select Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.[Name]=@ResName
+AND m.ItemID=ri.ItemID
+AND r.[Address]=@RAddress
+AND m.ItemID>(Select ItemID from MenuItem where Name=@MName))
+select * from prevRestaurantItem('Spicy Pakistani','Kababjees Fried Chicken','Ground Floor Komal Heaven Apartment Jauhar')
+
+create function prevRestaurantItem
+(@MName varchar(25), @ResName varchar(25),@RAddress varchar(50))
+returns table
+as
+return
+(select Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.[Name]=@ResName
+AND m.ItemID=ri.ItemID
+AND r.[Address]=@RAddress
+AND m.ItemID<(Select ItemID from MenuItem where Name=@MName))
+
+select * from getRestaurantMenu('Kababjees Fried Chicken','Ground Floor Komal Heaven Apartment Jauhar')
+
+create function searchItem
+(@ResName varchar(25), @RAddress varchar(50),@Desc varchar(25))
+returns table
+as
+return
+(Select distinct Top(3) m.Name, m.Description, m.Price
+from MenuItem m, Restaurant r, ResItem ri
+where ri.RestaurantID=r.RestaurantID
+AND r.[Name]=@ResName
+AND m.ItemID=ri.ItemID
+AND r.[Address]=@RAddress
+AND (m.Description like '%'+@Desc+'%' 
+OR m.Description like (@Desc+'%') OR m.Description like ('%'+@Desc) 
+OR m.Description like @Desc)
+)
+
+
+select * from searchItem('Kababjees Fried Chicken','Ground Floor Komal Heaven Apartment Jauhar','Chocolate')
+
+create function getRestaurantRating
+(@ResName varchar(25), @RAddress varchar(50))
+returns decimal(3,1)
+as
+begin
+declare @Rating decimal(3,1)
+Select @Rating=avg(Rating) from Restaurant r, ReviewRating rr
+where r.RestaurantID=rr.RestaurantID
+group by rr.RestaurantID,r.Name
+return @Rating
+end
+
+Select Top(4) r.Name, avg(Rating)'Rating' from Restaurant r, ReviewRating rr
+where r.RestaurantID=rr.RestaurantID
+group by rr.RestaurantID,r.Name
+order by avg(Rating)
+
+alter function getRestaurantRating
+(@ResName varchar(25), @RAddress varchar(50))
+returns decimal(2,1)
+as
+begin
+declare @Rating decimal(2,1)
+Select @Rating=avg(rr.Rating) from Restaurant r, ReviewRating rr
+where r.RestaurantID=(Select RestaurantID from Restaurant where Name=@ResName AND Address=@RAddress)
+RETURN ISNULL(@Rating, 0.0); -- Return the computed average rating, or 0.0 if no rating found
+end
+
+select dbo.getRestaurantRating('Kababjees Fried Chicken','Ground Floor Komal Heaven Apartment Jauhar')
+
+create view RidersOnDelivery
+as
+SELECT oi.RiderEmail
+FROM Employee e
+LEFT JOIN OrderInfo oi ON e.Email = oi.RiderEmail JOIN OrderStatus os ON oi.OrderID = os.OrderID
+LEFT JOIN StatusOfOrder so ON so.StatusID = os.StatusID
+WHERE (so.StatusName IS NULL OR so.StatusName = 'Pending')
+  AND e.Role = 'Rider'
+  
+  select * from RidersOnDelivery
+
+create view RidersAvailable
+as
+select distinct e.Email as 'RiderEmail'
+from Employee e, RidersOnDelivery r
+where e.Role='Rider'
+AND NOT e.Email=r.RiderEmail
+
+create procedure placeOrder
+@Code varchar(25)
+as
+begin
+if (@Code='N/A')
+begin
+insert into [Order](OrderDate) values (getdate())
+end
+else
+begin
+insert into [Order](OrderDate,CouponCode) values (getdate(),@Code)
+end
+end
+
+create procedure placeItemOrder
+@MName varchar(25),
+@Price decimal(10,2),
+@Qty int,
+@Subtotal decimal(10,2)
+as
+begin
+declare @OrderID int, @MenuID int;
+
+SELECT TOP 1 @OrderID=OrderID
+FROM [Order]
+ORDER BY OrderID DESC;
+
+select @MenuID=ItemID
+from MenuItem
+where Name=@MName AND Price=@Price
+
+insert into OrderItem(OrderID,MenuItemID,Quantity,Subtotal) values (@OrderID,@MenuID,@Qty,@Subtotal)
+end
+
+
+create procedure confirmCartOrder
+@Address varchar(50),
+@RName varchar(50),
+@RAddress varchar(50),
+@UEmail varchar(25),
+@PM varchar(25)
+as
+begin
+declare @RiderEmail varchar(25), @OrderID int, @AddressID int, @ResID int, @GTotal decimal(10,2);
+
+SELECT TOP 1 @OrderID=OrderID
+FROM [Order]
+ORDER BY OrderID DESC;
+
+select TOP 1 @RiderEmail=RiderEmail from RidersAvailable
+
+select @AddressID=AddressID from Address
+where Address=@Address
+
+Select @ResID=RestaurantID from Restaurant
+where Name=@RName AND Address=@RAddress
+
+insert into OrderInfo(OrderID,Email,RiderEmail,RestaurantID,AddressID)
+values (@OrderID,@UEmail,@RiderEmail,@ResID,@AddressID)
+
+select @GTotal=dbo.calGrandTotal(@OrderID)
+
+insert into GrandTotal(OrderID,TotalAmount) values (@OrderID,@GTotal)
+insert into Payment(OrderID,Amount,PaymentDate,PaymentMethod) values (@OrderID,@GTotal,getdate(),@PM)
+insert into OrderStatus(OrderID,StatusID) values (@OrderID,1)
+end
+
+create FUNCTION loginRider
+(@Email VARCHAR(25), @Password VARCHAR(25))
+RETURNS VARCHAR(10)
+AS
+BEGIN
+    DECLARE @userCount INT, @Result VARCHAR(10);
+
+    SELECT @userCount = COUNT(*)
+    FROM Employee
+    WHERE Email = @Email AND Password = @Password AND Role='Rider';
+
+    -- Return 'Success' if a matching user is found, otherwise 'Fail'
+    IF @userCount > 0
+        SET @Result = 'Success';
+    ELSE
+        SET @Result = 'Fail';
+
+    RETURN @Result;
+END;
+
+
+(select dbo.loginRider('as1@gmail.com','abc'))
+
+
+create function getRiderDetail
+(@Email varchar(25),@Password varchar(25))
+returns table
+as
+return
+(Select * from Employee
+where Email=@Email AND Password=@Password
+AND Role='Rider')
+
+create function riderOrders
+(@RiderEmail varchar(25))
+returns table
+as
+return
+SELECT  oi.OrderID, gt.TotalAmount, o.OrderDate, StatusName
+FROM Employee e
+ JOIN OrderInfo oi ON e.Email = oi.RiderEmail JOIN OrderStatus os ON oi.OrderID = os.OrderID
+ JOIN StatusOfOrder so ON so.StatusID = os.StatusID JOIN GrandTotal gt on oi.OrderID=gt.OrderID
+ JOIN [Order] o on oi.OrderID=o.OrderID
+WHERE e.Role = 'Rider'
+AND RiderEmail=@RiderEmail
+
+create procedure riderDeliverOrder
+@OrderID int, @msg varchar(30) OUTPUT
+as
+begin
+if exists (Select StatusID from OrderStatus where StatusID=1 AND OrderID=@OrderID)
+begin
+Update OrderStatus set StatusID=2
+where OrderID=@OrderID
+set @msg='Updated!'
+end
+else
+set @msg='Order is already delivered!'
+end
+
+declare @res varchar(30);
+exec riderDeliverOrder 7,@res OUTPUT
+print @res
+
+create function getRiderOrderInfo
+(@OrderID int)
+returns table
+as
+return
+(select (u.Name)'CustomerName', u.PhoneNo,a.Address'DeliveryAddress', r.Name as 'RestaurantName',
+r.Address'RestaurantAddress', o.OrderID, m.Name as 'Menu Item', m.Price'ItemPrice',pc.CouponCode,pc.Discount, oi.Quantity,oi.Subtotal'ItemSubTotal',
+gt.TotalAmount-Discount'OrderSubTotal', p.PaymentMethod, (gt.TotalAmount)'Total'
+from MenuItem m, OrderItem oi, OrderInfo oin, Payment p,
+Restaurant r, UserAddress ua, Address a, Employee e, Vehicle v, [User] u ,GrandTotal gt, [Order] o left join PromotionCoupon pc on pc.CouponCode=o.CouponCode
+where
+r.RestaurantID=oin.RestaurantID
+AND p.OrderID=@OrderID
+AND ua.Email=oin.Email
+AND m.ItemID=oi.MenuItemID
+and e.Email=oin.RiderEmail
+and e.VehicleID=v.VehicleID
+--and pc.CouponCode=o.CouponCode
+and o.OrderID=@OrderID
+and oi.OrderID=@OrderID
+and gt.OrderID=@OrderID
+AND oin.OrderID=@OrderID
+AND oin.Email=u.Email
+AND oin.AddressID=a.AddressID
+and o.OrderDate<=getdate())
+
+create view getAvailableCities
+as
+Select distinct City from Restaurant R
+
+select * from getAvailableCities
+
+create function getLastOrder()
+returns int
+as
+begin
+declare @OrderID int;
+select top(1) @OrderID=OrderID from [Order]
+order by OrderID desc
+return @OrderID
+end
+
+create view viewUserReviews
+as
+select rr.RevDate, u.Name'CustomerName', r.Name'RestaurantName', rr.Comment,rr.Rating
+from ReviewRating rr, Restaurant r, [User] u
+where u.email=rr.email
+AND r.RestaurantID=rr.RestaurantID
+
+select * from viewUserReviews
+
+
+--Procedures
+-- User Table
+CREATE PROCEDURE InsertUser
+    @Name VARCHAR(20),
+    @Password VARCHAR(20),
+    @Email VARCHAR(25),
+    @PhoneNo VARCHAR(20),
+    @DateOfBirth DATE,
+    @RegistrationDate DATE
+AS
+BEGIN
+    INSERT INTO [User] (Name, Password, Email, PhoneNo, DateOfBirth, RegistrationDate)
+    VALUES (@Name, @Password, @Email, @PhoneNo, @DateOfBirth, @RegistrationDate)
+END
+
+-- Address Table
+CREATE PROCEDURE InsertAddress
+    @Address VARCHAR(50)
+AS
+BEGIN
+    INSERT INTO Address (Address)
+    VALUES (@Address)
+END
+
+-- UserAddress Table
+CREATE PROCEDURE InsertUserAddress
+    @Email VARCHAR(25),
+    @AddressID INT,
+    @isDefault BIT
+AS
+BEGIN
+    INSERT INTO UserAddress (Email, AddressID, isDefault)
+    VALUES (@Email, @AddressID, @isDefault)
+END
+
+-- Employee Table
+CREATE PROCEDURE InsertEmployee
+    @FirstName VARCHAR(25),
+    @LastName VARCHAR(25),
+    @Email VARCHAR(25),
+    @Phone VARCHAR(25),
+    @Role VARCHAR(25),
+    @HireDate DATE,
+    @Salary DECIMAL(10, 2),
+    @VehicleID INT,
+    @Password VARCHAR(25)
+AS
+BEGIN
+    INSERT INTO Employee (FirstName, LastName, Email, Phone, Role, HireDate, Salary, VehicleID, Password)
+    VALUES (@FirstName, @LastName, @Email, @Phone, @Role, @HireDate, @Salary, @VehicleID, @Password)
+END
+
+-- GrandTotal Table
+CREATE PROCEDURE InsertGrandTotal
+    @OrderID INT,
+    @TotalAmount DECIMAL(10, 2)
+AS
+BEGIN
+    INSERT INTO GrandTotal (OrderID, TotalAmount)
+    VALUES (@OrderID, @TotalAmount)
+END
+
+-- MenuItem Table
+CREATE PROCEDURE InsertMenuItem
+    @Name VARCHAR(25),
+    @Description VARCHAR(50),
+    @Price DECIMAL(10, 2)
+AS
+BEGIN
+    INSERT INTO MenuItem (Name, Description, Price)
+    VALUES (@Name, @Description, @Price)
+END
+
+-- Order Table
+CREATE PROCEDURE InsertOrder
+    @OrderDate DATE,
+    @CouponCode VARCHAR(25)
+AS
+BEGIN
+    INSERT INTO [Order] (OrderDate, CouponCode)
+    VALUES (@OrderDate, @CouponCode)
+END
+
+-- OrderInfo Table
+CREATE PROCEDURE InsertOrderInfo
+    @OrderID INT,
+    @Email VARCHAR(25),
+    @RestaurantID INT,
+    @RiderEmail VARCHAR(25),
+    @AddressID INT
+AS
+BEGIN
+    INSERT INTO OrderInfo (OrderID, Email, RestaurantID, RiderEmail, AddressID)
+    VALUES (@OrderID, @Email, @RestaurantID, @RiderEmail, @AddressID)
+END
+
+-- OrderItem Table
+CREATE PROCEDURE InsertOrderItem
+    @OrderID INT,
+    @MenuItemID INT,
+    @Quantity INT,
+    @Subtotal DECIMAL(10, 2)
+AS
+BEGIN
+    INSERT INTO OrderItem (OrderID, MenuItemID, Quantity, Subtotal)
+    VALUES (@OrderID, @MenuItemID, @Quantity, @Subtotal)
+END
+
+-- Payment Table
+CREATE PROCEDURE InsertPayment
+    @OrderID INT,
+    @Amount DECIMAL(10, 2),
+    @PaymentDate DATE,
+    @PaymentMethod VARCHAR(25)
+AS
+BEGIN
+    INSERT INTO Payment (OrderID, Amount, PaymentDate, PaymentMethod)
+    VALUES (@OrderID, @Amount, @PaymentDate, @PaymentMethod)
+END
+
+-- PromotionCoupon Table
+CREATE PROCEDURE InsertPromotionCoupon
+    @CouponCode VARCHAR(25),
+    @Discount DECIMAL(5, 2),
+    @ExpiryDate DATE
+AS
+BEGIN
+    INSERT INTO PromotionCoupon (CouponCode, Discount, ExpiryDate)
+    VALUES (@CouponCode, @Discount, @ExpiryDate)
+END
+
+-- Restaurant Table
+CREATE PROCEDURE InsertRestaurant
+    @Name VARCHAR(25),
+    @Address VARCHAR(50),
+    @City VARCHAR(25),
+    @ContactInformation VARCHAR(25),
+    @OpeningTime TIME,
+    @ClosingTime TIME
+AS
+BEGIN
+    INSERT INTO Restaurant (Name, Address, City, ContactInformation, OpeningTime, ClosingTime)
+    VALUES (@Name, @Address, @City, @ContactInformation, @OpeningTime, @ClosingTime)
+END
+
+-- Vehicle Table
+CREATE PROCEDURE InsertVehicle
+    @VehicleType VARCHAR(20),
+    @LicensePlate VARCHAR(7),
+    @Model VARCHAR(4)
+AS
+BEGIN
+    INSERT INTO Vehicle (VehicleType, LicensePlate, Model)
+    VALUES (@VehicleType, @LicensePlate, @Model)
+END
+
+
+
+--for delete procedures
+-- User Table
+CREATE PROCEDURE DeleteUser
+    @Email VARCHAR(25)
+AS
+BEGIN
+    DELETE FROM [User]
+    WHERE Email = @Email
+END
+
+-- Address Table
+CREATE PROCEDURE DeleteAddress
+    @AddressID INT
+AS
+BEGIN
+    DELETE FROM Address
+    WHERE AddressID = @AddressID
+END
+
+-- UserAddress Table
+CREATE PROCEDURE DeleteUserAddress
+    @Email VARCHAR(25),
+    @AddressID INT
+AS
+BEGIN
+    DELETE FROM UserAddress
+    WHERE Email = @Email AND AddressID = @AddressID
+END
+
+-- Employee Table
+CREATE PROCEDURE DeleteEmployee
+    @Email VARCHAR(25)
+AS
+BEGIN
+    DELETE FROM Employee
+    WHERE Email = @Email
+END
+
+-- GrandTotal Table
+CREATE PROCEDURE DeleteGrandTotal
+    @OrderID INT
+AS
+BEGIN
+    DELETE FROM GrandTotal
+    WHERE OrderID = @OrderID
+END
+
+-- MenuItem Table
+CREATE PROCEDURE DeleteMenuItem
+    @ItemID INT
+AS
+BEGIN
+    DELETE FROM MenuItem
+    WHERE ItemID = @ItemID
+END
+
+-- Order Table
+CREATE PROCEDURE DeleteOrder
+    @OrderID INT
+AS
+BEGIN
+    DELETE FROM [Order]
+    WHERE OrderID = @OrderID
+END
+
+-- OrderInfo Table
+CREATE PROCEDURE DeleteOrderInfo
+    @OrderID INT
+AS
+BEGIN
+    DELETE FROM OrderInfo
+    WHERE OrderID = @OrderID
+END
+
+-- OrderItem Table
+CREATE PROCEDURE DeleteOrderItem
+    @OrderItemID INT
+AS
+BEGIN
+    DELETE FROM OrderItem
+    WHERE OrderItemID = @OrderItemID
+END
+
+-- Payment Table
+CREATE PROCEDURE DeletePayment
+    @PaymentID INT
+AS
+BEGIN
+    DELETE FROM Payment
+    WHERE PaymentID = @PaymentID
+END
+
+-- PromotionCoupon Table
+CREATE PROCEDURE DeletePromotionCoupon
+    @CouponCode VARCHAR(25)
+AS
+BEGIN
+    DELETE FROM PromotionCoupon
+    WHERE CouponCode = @CouponCode
+END
+
+-- Restaurant Table
+CREATE PROCEDURE DeleteRestaurant
+    @RestaurantID INT
+AS
+BEGIN
+    DELETE FROM Restaurant
+    WHERE RestaurantID = @RestaurantID
+END
+
+-- Vehicle Table
+CREATE PROCEDURE DeleteVehicle
+    @VehicleID INT
+AS
+BEGIN
+    DELETE FROM Vehicle
+    WHERE VehicleID = @VehicleID
+END
+
